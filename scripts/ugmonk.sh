@@ -3,7 +3,7 @@
 DB_FILE="$HOME/.ogmonk_tmux.db"
 TODAY=$(date "+%d-%m-%Y")
 
-# Crear la base de datos y la tabla si no existen
+# Create the database and table if they don't exist
 initialize_db() {
     sqlite3 "$DB_FILE" <<EOF
 CREATE TABLE IF NOT EXISTS tasks (
@@ -35,24 +35,33 @@ show_tasks() {
     tmux display-menu -x R -y S -T "$(date "+%Y-%m-%d")" \
         "${tasks[@]}" \
         "" \
-        "New thing" "n" "run-shell '$0 add'" \
+        "New task" "n" "run-shell '$0 add'" \
         "Delete" "d" "run-shell '$0 remove'" \
         "" \
         "Help" "?" "run-shell '$0 help'"
 }
 
 add_task() {
-    tmux command-prompt -p "Nueva tarea: " "run-shell 'sqlite3 $DB_FILE \"INSERT INTO tasks (date, status, task, created_at) VALUES (\\\"$TODAY\\\", \\\"u\\\", \\\"%1\\\", \\\"$(date "+%Y-%m-%d %H:%M:%S")\\\")\"; $0 show'"
+    local task_count
+    task_count=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM tasks WHERE date = '$TODAY'")
+
+    if [ "$task_count" -ge 9 ]; then
+        tmux display-message "You cannot add more than 9 tasks per day."
+        $0 show
+        return
+    fi
+
+    tmux command-prompt -p "New task: " "run-shell 'sqlite3 $DB_FILE \"INSERT INTO tasks (date, status, task, created_at) VALUES (\\\"$TODAY\\\", \\\"u\\\", \\\"%1\\\", \\\"$(date "+%Y-%m-%d %H:%M:%S")\\\")\"; $0 show'"
 }
 
 remove_task() {
-    tmux command-prompt -p "Número de tarea a eliminar: " "run-shell '$0 delete %1'"
+    tmux command-prompt -p "Task number to delete: " "run-shell '$0 delete %1'"
 }
 
 delete_task() {
     local line_number="$1"
     if [[ -z "$line_number" ]]; then
-        echo "Número de línea no especificado."
+        echo "Line number not specified."
         return 1
     fi
 
@@ -60,7 +69,7 @@ delete_task() {
     id_to_delete=$(sqlite3 "$DB_FILE" "SELECT id FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) AS row_num FROM tasks WHERE date = '$TODAY') WHERE row_num = $line_number")
 
     if [[ -z "$id_to_delete" ]]; then
-        echo "ID no encontrado para el número de línea: $line_number."
+        echo "ID not found for line number: $line_number."
         return 1
     fi
 
@@ -131,7 +140,7 @@ main() {
             help_ogmonk
             ;;
         *)
-            echo "Uso: $0 {show|add|remove|toggle|delete|menu|help}"
+            echo "Usage: $0 {show|add|remove|toggle|delete|menu|help}"
             ;;
     esac
 }
