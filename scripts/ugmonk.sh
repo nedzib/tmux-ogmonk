@@ -1,17 +1,26 @@
 #!/usr/bin/env bash
 
-TASK_FILE="$HOME/.ogmonk_tmux.txt"
+DB_FILE="$HOME/.ogmonk_tmux.db"
+TODAY=$(date "+%d-%m-%Y")
 
-# Crear el archivo si no existe
-if [ ! -f "$TASK_FILE" ]; then
-    touch "$TASK_FILE"
-fi
+# Crear la base de datos y la tabla si no existen
+initialize_db() {
+    sqlite3 "$DB_FILE" <<EOF
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    status TEXT NOT NULL,
+    task TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+EOF
+}
 
 show_tasks() {
     local tasks=()
     local line_number=0
 
-    while IFS='|' read -r date status task; do
+    while IFS='|' read -r id date status task created_at; do
         line_number=$((line_number + 1))
         case "$status" in
             u) status_text="󰄰" ;;
@@ -20,19 +29,20 @@ show_tasks() {
             t) status_text="󰪌" ;;
             r) status_text="󱖘" ;;
         esac
-        tasks+=("${status_text} ${task}" "${line_number}" "run-shell '$0 toggle ${line_number}'")
-    done < "$TASK_FILE"
+        tasks+=("${status_text} ${task}" "${line_number}" "run-shell '$0 toggle ${id}'")
+    done < <(sqlite3 "$DB_FILE" "SELECT id, date, status, task, created_at FROM tasks WHERE date = '$TODAY' ORDER BY created_at")
 
-    tmux display-menu -x R -y S -T "$(date "+%d-%m-%Y") - ogMonk" \
+    tmux display-menu -x R -y S -T "$(date "+%Y-%m-%d")" \
         "${tasks[@]}" \
         "" \
         "New thing" "n" "run-shell '$0 add'" \
         "Delete" "d" "run-shell '$0 remove'" \
+        "" \
         "Help" "?" "run-shell '$0 help'"
 }
 
 add_task() {
-    tmux command-prompt -p "Nueva tarea: " "run-shell 'echo \"$(date "+%d-%m-%Y")|u|%1\" >> $TASK_FILE; $0 show'"
+    tmux command-prompt -p "Nueva tarea: " "run-shell 'sqlite3 $DB_FILE \"INSERT INTO tasks (date, status, task, created_at) VALUES (\\\"$TODAY\\\", \\\"u\\\", \\\"%1\\\", \\\"$(date "+%Y-%m-%d %H:%M:%S")\\\")\"; $0 show'"
 }
 
 remove_task() {
@@ -45,20 +55,25 @@ delete_task() {
         echo "Número de línea no especificado."
         return 1
     fi
-    if ! [[ "$line_number" =~ ^[0-9]+$ ]]; then
-        echo "Número de línea inválido."
+
+    local id_to_delete
+    id_to_delete=$(sqlite3 "$DB_FILE" "SELECT id FROM (SELECT id, ROW_NUMBER() OVER (ORDER BY created_at) AS row_num FROM tasks WHERE date = '$TODAY') WHERE row_num = $line_number")
+
+    if [[ -z "$id_to_delete" ]]; then
+        echo "ID no encontrado para el número de línea: $line_number."
         return 1
     fi
-    sed -i.bak "${line_number}d" "$TASK_FILE" && rm "$TASK_FILE.bak"
+
+    sqlite3 "$DB_FILE" "DELETE FROM tasks WHERE id = $id_to_delete"
     $0 show
 }
 
 change_status() {
-    local line_number="$1"
-    local current_line
-    current_line=$(sed -n "${line_number}p" "$TASK_FILE")
+    local id="$1"
+    local current_task
+    current_task=$(sqlite3 "$DB_FILE" "SELECT date, status, task FROM tasks WHERE id = $id AND date = '$TODAY'")
 
-    IFS='|' read -r date status task <<< "$current_line"
+    IFS='|' read -r date status task <<< "$current_task"
 
     case "$status" in
         u) new_status="p" ;;
@@ -68,7 +83,7 @@ change_status() {
         r) new_status="u" ;;
     esac
 
-    sed -i.bak "${line_number}s/.*/${date}|${new_status}|${task}/" "$TASK_FILE" && rm "$TASK_FILE.bak"
+    sqlite3 "$DB_FILE" "UPDATE tasks SET status = '$new_status' WHERE id = $id AND date = '$TODAY'"
     $0 show
 }
 
@@ -81,7 +96,7 @@ help_ogmonk() {
 󱖘 - Delegated
 
 press esc'"
-$0 show
+    $0 show
 }
 
 popup_menu() {
@@ -89,6 +104,7 @@ popup_menu() {
 }
 
 main() {
+    initialize_db
     cmd="$1"
     shift
 
