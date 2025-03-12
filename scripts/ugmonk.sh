@@ -32,7 +32,7 @@ show_tasks() {
         tasks+=("${status_text} ${task}" "${line_number}" "run-shell '$0 toggle ${id}'")
     done < <(sqlite3 "$DB_FILE" "SELECT id, date, status, task, created_at FROM tasks WHERE date = '$TODAY' ORDER BY created_at")
 
-    tmux display-menu -x R -y S -T "$(date "+%Y-%m-%d")" \
+    tmux display-menu -x C -y C -T "$(date "+%Y-%m-%d")" \
         "${tasks[@]}" \
         "" \
         "New task" "n" "run-shell '$0 add'" \
