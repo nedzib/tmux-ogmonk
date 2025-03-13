@@ -35,9 +35,12 @@ show_tasks() {
   prev_date=$(date -d "$date - 1 day" "+%Y-%m-%d")
   next_date=$(date -d "$date + 1 day" "+%Y-%m-%d")
 
-  menu=(
-    "$(formatted_date "$date")"
-  )
+
+  if [[ "$date" == "$TODAY" ]]; then
+    menu=("Today: $(formatted_date "$date")")
+  else
+    menu=("Date: $(formatted_date "$date")")
+  fi
 
   if [[ ${#tasks[@]} -eq 0 ]]; then
     menu+=("There is no task for this day" "" "")
@@ -51,22 +54,26 @@ show_tasks() {
 
   if [[ "$date" == "$TODAY" ]]; then
     menu+=(
-    "New task" "n" "run-shell '$0 add'"
+    "New task" "n" "run-shell '$0 add $date'"
   )
   fi
 
   menu+=(
   "Delete" "d" "run-shell '$0 remove $date'"
-  "<< Previous" "h" "run-shell '$0 show $prev_date'"
+  ""
+  " Prev" "h" "run-shell '$0 show $prev_date'"
   )
 
   if [[ "$date" != "$TODAY" ]]; then
-    menu+=("Next >>" "l" "run-shell '$0 show $next_date'")
+    menu+=(
+    " Next" "l" "run-shell '$0 show $next_date'"
+    "Today" "t" "run-shell '$0 show $TODAY'"
+    )
   fi
 
   menu+=(
   ""
-  "Help" "?" "run-shell '$0 help'"
+  "󰋗 Help" "?" "run-shell '$0 help'"
   )
 
   tmux display-menu -x C -y C -T "${menu[@]}"
@@ -97,7 +104,7 @@ add_task() {
     return
   fi
 
-  tmux command-prompt -p "New task: " "run-shell 'sqlite3 $DB_FILE \"INSERT INTO tasks (status, task) VALUES (1, \\\"%1\\\")\"; $0 show'"
+  tmux command-prompt -p "New task: " "run-shell 'sqlite3 $DB_FILE \"INSERT INTO tasks (status, task) VALUES (0, \\\"%1\\\")\"; $0 show $1'"
 }
 
 insert_task() {
@@ -171,7 +178,7 @@ main() {
       show_tasks "$@"
       ;;
     add)
-      add_task
+      add_task "$@"
       ;;
     remove)
       remove_task "$@"
