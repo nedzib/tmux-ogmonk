@@ -54,13 +54,14 @@ show_tasks() {
 
   if [[ "$date" == "$TODAY" ]]; then
     menu+=(
+    "Daily Review" "r" "run-shell '$0 daily'"
     "New task" "n" "run-shell '$0 add $date'"
+    "Delete" "d" "run-shell '$0 remove $date'"
+    ""
   )
   fi
 
   menu+=(
-  "Delete" "d" "run-shell '$0 remove $date'"
-  ""
   " Prev" "h" "run-shell '$0 show $prev_date'"
   )
 
@@ -77,6 +78,57 @@ show_tasks() {
   )
 
   tmux display-menu -x C -y C -T "${menu[@]}"
+}
+
+daily_review(){
+  local today_tasks=""
+  local yesterday_tasks=""
+  local line_number=0
+  local date=$TODAY
+
+  while IFS='|' read -r id status task; do
+    line_number=$((line_number + 1))
+    case "$status" in
+      '0') status_text="󰄰" ;;
+      '1') status_text="󱎖" ;;
+      '2') status_text="󰄯" ;;
+      '3') status_text="󰪌" ;;
+      '4') status_text="󱖘" ;;
+    esac
+    today_tasks+="| ${status_text} ${task}\n"
+  done < <(tasks_by_date "$date")
+
+  prev_date=$(date -d "$date - 1 day" "+%Y-%m-%d")
+  while IFS='|' read -r id status task; do
+    line_number=$((line_number + 1))
+    case "$status" in
+      '0') status_text="󰄰" ;;
+      '1') status_text="󱎖" ;;
+      '2') status_text="󰄯" ;;
+      '3') status_text="󰪌" ;;
+      '4') status_text="󱖘" ;;
+    esac
+    yesterday_tasks+="| ${status_text} ${task}\n"
+  done < <(tasks_by_date "$prev_date")
+
+  max_length=$(printf "%s\n%s" "$yesterday_task" "$today_task" | awk '{ if (length > max) max = length } END { print max }')
+  popup_width=$((max_length + 10))
+
+  [ "$popup_width" -lt 40 ] && popup_width=40
+  [ "$popup_width" -gt 80 ] && popup_width=80
+
+
+  tmux display-popup -w ${popup_width} "echo '
+  Yesterday ($prev_date):
+  ___________________________________
+  \n$yesterday_tasks
+
+  Today ($TODAY):
+  ___________________________________
+  \n$today_tasks
+  '"
+
+  $0 show $TODAY
 }
 
 
@@ -194,6 +246,9 @@ main() {
       ;;
     help)
       help_ogmonk
+      ;;
+    daily)
+      daily_review
       ;;
     *)
       echo "Usage: $0 {show|add|remove|toggle|delete|menu|help}"
