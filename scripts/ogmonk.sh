@@ -209,14 +209,26 @@ change_status() {
 }
 
 help_ogmonk() {
-  tmux display-popup -w 50% -h 50% "echo 'Symbols and their meanings:
-  󰄰 - Pending
-  󱎖 - In Progress
-  󰄯 - Done
-  󰪌 - Meeting
-  󱖘 - Delegated
+  tmux display-popup -w 50% -h 70% "echo '
+  OGMonk Help
 
-  press esc'"
+  -- Keybindings --
+    h     - Go to Previous day
+    l     - Go to Next day
+    t     - Go to Today
+    r     - Daily Review
+    n     - Add a new task
+    d     - Delete a task
+
+  -- Status Symbols --
+    󰄰 - Pending
+    󱎖 - In Progress
+    󰄯 - Done
+    󰪌 - Meeting
+    󱖘 - Delegated
+
+  Press esc to close.
+  '"
   $0 show
 }
 
